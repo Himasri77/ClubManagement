@@ -1,17 +1,23 @@
 const { run, get, all } = require('../config/db');
+const { logActivity } = require('../utils/activityLogger');
 
 // 1. Get All Clubs (with filtering & search)
 exports.getAllClubs = async (req, res, next) => {
   try {
     const { category, search, status } = req.query;
+    const userId = req.user?.id || null;
     let query = `
       SELECT c.*, u.full_name as lead_name, u.email as lead_email,
-             (SELECT COUNT(*) FROM memberships m WHERE m.club_id = c.id AND m.status = 'approved') as member_count
+             (SELECT COUNT(*) FROM club_members m WHERE m.club_id = c.id) as member_count,
+             (SELECT 1 FROM club_members m WHERE m.club_id = c.id AND m.user_id = ?) as is_member,
+             (SELECT r.status FROM membership_requests r
+                WHERE r.club_id = c.id AND r.user_id = ?
+                ORDER BY r.requested_at DESC LIMIT 1) as request_status
       FROM clubs c
-      LEFT JOIN users u ON c.lead_id = u.id
+      LEFT JOIN users u ON c.club_lead_id = u.id
       WHERE 1=1
     `;
-    const params = [];
+    const params = [userId, userId];
 
     // Filter by status (default to active for students unless specified)
     if (status) {
@@ -47,7 +53,7 @@ exports.getClubById = async (req, res, next) => {
     const club = await get(
       `SELECT c.*, u.full_name as lead_name, u.email as lead_email, u.phone as lead_phone
        FROM clubs c
-       LEFT JOIN users u ON c.lead_id = u.id
+       LEFT JOIN users u ON c.club_lead_id = u.id
        WHERE c.id = ?`,
       [id]
     );
@@ -56,9 +62,9 @@ exports.getClubById = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Club not found.' });
     }
 
-    // Get active members count
+    // Get member count
     const memberStats = await get(
-      `SELECT COUNT(*) as total FROM memberships WHERE club_id = ? AND status = 'approved'`,
+      `SELECT COUNT(*) as total FROM club_members WHERE club_id = ?`,
       [id]
     );
 
@@ -70,42 +76,63 @@ exports.getClubById = async (req, res, next) => {
   }
 };
 
-// 3. Create New Club (Admin Direct Creation or Student Request)
+// 3. Create New Club (Admin only — matches schema's NOT NULL columns)
 exports.createClub = async (req, res, next) => {
   try {
-    const { name, code, category, description, lead_id, logo_url, banner_url } = req.body;
+    const {
+      name, code, category, description,
+      faculty_coordinator, contact_email, contact_phone,
+      club_lead_id, logo
+    } = req.body;
 
-    if (!name || !code || !category || !description) {
-      return res.status(400).json({ success: false, message: 'Name, code, category, and description are required.' });
+    // Required by schema.sql: name, code, description, category,
+    // faculty_coordinator, contact_email are all NOT NULL
+    if (!name || !code || !category || !description || !faculty_coordinator || !contact_email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name, code, category, description, faculty coordinator, and contact email are required.'
+      });
     }
 
-    // Check unique code
-    const existing = await get('SELECT id FROM clubs WHERE code = ?', [code.toUpperCase().trim()]);
-    if (existing) {
+    // Only admins can create clubs directly in this schema (clubs.status
+    // only supports 'active'/'inactive' — there's no pending/review state)
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Only admins can create clubs.' });
+    }
+
+    // Check unique name/code
+    const existingCode = await get('SELECT id FROM clubs WHERE code = ?', [code.toUpperCase().trim()]);
+    if (existingCode) {
       return res.status(400).json({ success: false, message: 'A club with this code already exists.' });
     }
-
-    const isAdmin = req.user.role === 'admin';
-    const initialStatus = isAdmin ? 'active' : 'pending';
-    const assignedLeadId = lead_id || (isAdmin ? null : req.user.id);
+    const existingName = await get('SELECT id FROM clubs WHERE name = ?', [name.trim()]);
+    if (existingName) {
+      return res.status(400).json({ success: false, message: 'A club with this name already exists.' });
+    }
 
     const result = await run(
-      `INSERT INTO clubs (name, code, category, description, lead_id, logo_url, banner_url, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [name.trim(), code.toUpperCase().trim(), category, description, assignedLeadId, logo_url || null, banner_url || null, initialStatus]
+      `INSERT INTO clubs (name, code, description, category, logo, faculty_coordinator, club_lead_id, contact_email, contact_phone)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        name.trim(), code.toUpperCase().trim(), description.trim(), category,
+        logo || null, faculty_coordinator.trim(), club_lead_id || null,
+        contact_email.trim(), contact_phone || null
+      ]
     );
 
-    // If student requested, also auto-add as lead in memberships
-    if (!isAdmin && assignedLeadId) {
+    // If a lead was assigned at creation, add them to club_members
+    if (club_lead_id) {
       await run(
-        `INSERT INTO memberships (user_id, club_id, role, status) VALUES (?, ?, 'lead', 'approved')`,
-        [assignedLeadId, result.lastID]
+        `INSERT INTO club_members (club_id, user_id, role) VALUES (?, ?, 'Club Lead')`,
+        [result.lastID, club_lead_id]
       );
     }
 
+    await logActivity(req.user.id, 'create', 'club', result.lastID, `Club "${name.trim()}" was created`);
+
     return res.status(201).json({
       success: true,
-      message: isAdmin ? 'Club created successfully!' : 'Club creation proposal submitted for Admin review.',
+      message: 'Club created successfully!',
       club_id: result.lastID
     });
   } catch (err) {
@@ -117,7 +144,10 @@ exports.createClub = async (req, res, next) => {
 exports.updateClub = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, category, description, lead_id, status, logo_url, banner_url } = req.body;
+    const {
+      name, category, description, club_lead_id, status,
+      logo, faculty_coordinator, contact_email, contact_phone
+    } = req.body;
 
     const club = await get('SELECT * FROM clubs WHERE id = ?', [id]);
     if (!club) {
@@ -125,7 +155,7 @@ exports.updateClub = async (req, res, next) => {
     }
 
     // Permission check
-    if (req.user.role !== 'admin' && club.lead_id !== req.user.id) {
+    if (req.user.role !== 'admin' && club.club_lead_id !== req.user.id) {
       return res.status(403).json({ success: false, message: 'Unauthorized to update this club.' });
     }
 
@@ -134,13 +164,15 @@ exports.updateClub = async (req, res, next) => {
         name = COALESCE(?, name),
         category = COALESCE(?, category),
         description = COALESCE(?, description),
-        lead_id = COALESCE(?, lead_id),
+        club_lead_id = COALESCE(?, club_lead_id),
         status = COALESCE(?, status),
-        logo_url = COALESCE(?, logo_url),
-        banner_url = COALESCE(?, banner_url),
+        logo = COALESCE(?, logo),
+        faculty_coordinator = COALESCE(?, faculty_coordinator),
+        contact_email = COALESCE(?, contact_email),
+        contact_phone = COALESCE(?, contact_phone),
         updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
-      [name, category, description, lead_id, status, logo_url, banner_url, id]
+      [name, category, description, club_lead_id, status, logo, faculty_coordinator, contact_email, contact_phone, id]
     );
 
     return res.status(200).json({ success: true, message: 'Club updated successfully.' });
@@ -149,17 +181,27 @@ exports.updateClub = async (req, res, next) => {
   }
 };
 
-// 5. Admin Approve/Reject Club Request
+// 5. Admin Activate/Deactivate a Club
+// Note: schema.sql's clubs.status CHECK constraint only allows 'active' | 'inactive'.
+// There is no pending/rejected state for club creation — only admins create clubs,
+// so there's nothing to "review". This endpoint just toggles visibility.
 exports.reviewClubStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { status } = req.body; // 'active' or 'rejected'
+    const { status } = req.body; // 'active' or 'inactive'
 
-    if (!['active', 'rejected'].includes(status)) {
-      return res.status(400).json({ success: false, message: 'Invalid status specified.' });
+    if (!['active', 'inactive'].includes(status)) {
+      return res.status(400).json({ success: false, message: "Invalid status. Must be 'active' or 'inactive'." });
+    }
+
+    const club = await get('SELECT id FROM clubs WHERE id = ?', [id]);
+    if (!club) {
+      return res.status(404).json({ success: false, message: 'Club not found.' });
     }
 
     await run('UPDATE clubs SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [status, id]);
+
+    await logActivity(req.user.id, 'update', 'club', id, `Club status changed to ${status}`);
 
     return res.status(200).json({
       success: true,

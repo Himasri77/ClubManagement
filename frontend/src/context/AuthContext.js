@@ -31,8 +31,18 @@ export const AuthProvider = ({ children }) => {
     setActiveRole(newRole);
   };
 
+  // Lets an admin preview the app as a student without a second login.
+  // Only meaningful when the underlying account (user.role) is 'admin' —
+  // activeRole is what components actually render against.
+  const isViewingAsStudent = user?.role === 'admin' && activeRole === 'student';
+
+  const toggleStudentView = () => {
+    if (user?.role !== 'admin') return;
+    switchRole(isViewingAsStudent ? 'admin' : 'student');
+  };
+
   return (
-    <AuthContext.Provider value={{ user, activeRole, login, logout, switchRole }}>
+    <AuthContext.Provider value={{ user, activeRole, login, logout, switchRole, isViewingAsStudent, toggleStudentView }}>
       {children}
     </AuthContext.Provider>
   );

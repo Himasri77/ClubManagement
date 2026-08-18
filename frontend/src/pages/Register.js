@@ -12,7 +12,7 @@ export default function Register() {
     password: '',
     role: 'student',
     department: '',
-    student_id: ''
+    roll_number: ''
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -85,8 +85,8 @@ export default function Register() {
 
             {formData.role === 'student' && (
               <div>
-                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>Student ID</label>
-                <input type="text" placeholder="23B01A42..." value={formData.student_id} onChange={(e) => setFormData({ ...formData, student_id: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>Roll Number</label>
+                <input type="text" placeholder="23B01A42..." value={formData.roll_number} onChange={(e) => setFormData({ ...formData, roll_number: e.target.value })} style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
               </div>
             )}
           </div>

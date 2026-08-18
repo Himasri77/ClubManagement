@@ -7,6 +7,11 @@ import ForgotPassword from './pages/ForgotPassword';
 import ProtectedRoute from './components/ProtectedRoute';
 import MainLayout from './components/MainLayout';
 import ClubsList from './pages/ClubsList';
+import MembershipRequests from './pages/MembershipRequests';
+import AdminDashboard from './pages/AdminDashboard';
+import StudentDashboard from './pages/StudentDashboard';
+import EventsList from './pages/EventsList';
+import Announcements from './pages/Announcements';
 
 function App() {
   return (
@@ -24,10 +29,7 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={['admin']}>
                 <MainLayout>
-                  <div style={{ backgroundColor: '#fff', padding: '24px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <h2 style={{ margin: 0, color: '#0f172a' }}>Admin Overview Dashboard</h2>
-                    <p style={{ color: '#64748b', marginTop: '8px' }}>Manage all club submissions, approvals, events and memberships.</p>
-                  </div>
+                  <AdminDashboard />
                 </MainLayout>
               </ProtectedRoute>
             }
@@ -42,6 +44,36 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/admin/approvals"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <MainLayout>
+                  <MembershipRequests />
+                </MainLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/events"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <MainLayout>
+                  <EventsList />
+                </MainLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/announcements"
+            element={
+              <ProtectedRoute allowedRoles={['admin']}>
+                <MainLayout>
+                  <Announcements />
+                </MainLayout>
+              </ProtectedRoute>
+            }
+          />
 
           {/* Student Routes */}
           <Route
@@ -49,10 +81,7 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={['student']}>
                 <MainLayout>
-                  <div style={{ backgroundColor: '#fff', padding: '24px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                    <h2 style={{ margin: 0, color: '#0f172a' }}>Student Home Dashboard</h2>
-                    <p style={{ color: '#64748b', marginTop: '8px' }}>Welcome back! Browse campus clubs and register for upcoming events.</p>
-                  </div>
+                  <StudentDashboard />
                 </MainLayout>
               </ProtectedRoute>
             }
@@ -63,6 +92,26 @@ function App() {
               <ProtectedRoute allowedRoles={['student']}>
                 <MainLayout>
                   <ClubsList />
+                </MainLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/student/events"
+            element={
+              <ProtectedRoute allowedRoles={['student']}>
+                <MainLayout>
+                  <EventsList />
+                </MainLayout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/student/announcements"
+            element={
+              <ProtectedRoute allowedRoles={['student']}>
+                <MainLayout>
+                  <Announcements />
                 </MainLayout>
               </ProtectedRoute>
             }

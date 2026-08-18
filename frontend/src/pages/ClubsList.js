@@ -1,22 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
-import { Layers, Search, Plus, CheckCircle, XCircle, Users } from 'lucide-react';
+import { Layers, Search, Plus, CheckCircle, XCircle, Users, Clock, UserPlus } from 'lucide-react';
 
 export default function ClubsList() {
-  const { activeRole } = useAuth();
+  const { activeRole, user } = useAuth();
   const [clubs, setClubs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [joinMsg, setJoinMsg] = useState({});
+  const [joiningId, setJoiningId] = useState(null);
+  const [editingClub, setEditingClub] = useState(null);
+  const [editFormData, setEditFormData] = useState(null);
+  const [editMsg, setEditMsg] = useState({ error: '', success: '' });
 
   // Form state
   const [formData, setFormData] = useState({
     name: '',
     code: '',
     category: 'Technical',
-    description: ''
+    description: '',
+    faculty_coordinator: '',
+    contact_email: ''
   });
   const [formMsg, setFormMsg] = useState({ error: '', success: '' });
 
@@ -47,7 +54,7 @@ export default function ClubsList() {
     try {
       const res = await api.post('/clubs', formData);
       setFormMsg({ error: '', success: res.data.message });
-      setFormData({ name: '', code: '', category: 'Technical', description: '' });
+      setFormData({ name: '', code: '', category: 'Technical', description: '', faculty_coordinator: '', contact_email: '' });
       fetchClubs();
       setTimeout(() => setShowModal(false), 1500);
     } catch (err) {
@@ -61,6 +68,53 @@ export default function ClubsList() {
       fetchClubs();
     } catch (err) {
       alert('Failed to update status.');
+    }
+  };
+
+  const handleJoin = async (clubId) => {
+    setJoiningId(clubId);
+    setJoinMsg((prev) => ({ ...prev, [clubId]: '' }));
+    try {
+      const res = await api.post(`/clubs/${clubId}/join`);
+      setJoinMsg((prev) => ({ ...prev, [clubId]: res.data.message }));
+      fetchClubs();
+    } catch (err) {
+      setJoinMsg((prev) => ({ ...prev, [clubId]: err.response?.data?.message || 'Failed to send request.' }));
+    } finally {
+      setJoiningId(null);
+    }
+  };
+
+  // Admins can edit any club; a club's own lead can edit theirs — mirrors
+  // the permission check already enforced server-side in updateClub.
+  const canEdit = (club) => activeRole === 'admin' || (user && club.club_lead_id === user.id);
+
+  const openEditModal = (club) => {
+    setEditingClub(club);
+    setEditMsg({ error: '', success: '' });
+    setEditFormData({
+      name: club.name || '',
+      category: club.category || 'Technical',
+      description: club.description || '',
+      faculty_coordinator: club.faculty_coordinator || '',
+      contact_email: club.contact_email || '',
+      contact_phone: club.contact_phone || ''
+    });
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    setEditMsg({ error: '', success: '' });
+    try {
+      const res = await api.put(`/clubs/${editingClub.id}`, editFormData);
+      setEditMsg({ error: '', success: res.data.message });
+      fetchClubs();
+      setTimeout(() => {
+        setEditingClub(null);
+        setEditFormData(null);
+      }, 1200);
+    } catch (err) {
+      setEditMsg({ error: err.response?.data?.message || 'Failed to update club.', success: '' });
     }
   };
 
@@ -142,8 +196,8 @@ export default function ClubsList() {
                     fontSize: '11px',
                     fontWeight: '700',
                     textTransform: 'uppercase',
-                    backgroundColor: club.status === 'active' ? '#dcfce7' : club.status === 'pending' ? '#fef3c7' : '#fee2e2',
-                    color: club.status === 'active' ? '#166534' : club.status === 'pending' ? '#92400e' : '#991b1b'
+                    backgroundColor: club.status === 'active' ? '#dcfce7' : '#fee2e2',
+                    color: club.status === 'active' ? '#166534' : '#991b1b'
                   }}>
                     {club.status}
                   </span>
@@ -163,21 +217,62 @@ export default function ClubsList() {
                   <span>Lead: {club.lead_name || 'Unassigned'}</span>
                 </div>
 
-                {activeRole === 'admin' && club.status === 'pending' && (
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button
-                      onClick={() => handleStatusUpdate(club.id, 'active')}
-                      style={{ flex: 1, backgroundColor: '#16a34a', color: '#fff', border: 'none', padding: '8px', borderRadius: '6px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
-                    >
-                      <CheckCircle size={14} /> Approve
-                    </button>
-                    <button
-                      onClick={() => handleStatusUpdate(club.id, 'rejected')}
-                      style={{ flex: 1, backgroundColor: '#dc2626', color: '#fff', border: 'none', padding: '8px', borderRadius: '6px', fontSize: '12px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
-                    >
-                      <XCircle size={14} /> Reject
-                    </button>
-                  </div>
+                {canEdit(club) && (
+                  <button
+                    onClick={() => openEditModal(club)}
+                    style={{
+                      width: '100%', backgroundColor: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe',
+                      padding: '8px', borderRadius: '6px', fontSize: '12px', fontWeight: '600', cursor: 'pointer',
+                      marginBottom: '8px'
+                    }}
+                  >
+                    Edit Club Details
+                  </button>
+                )}
+
+                {activeRole === 'admin' && (
+                  <button
+                    onClick={() => handleStatusUpdate(club.id, club.status === 'active' ? 'inactive' : 'active')}
+                    style={{
+                      width: '100%',
+                      backgroundColor: club.status === 'active' ? '#fee2e2' : '#dcfce7',
+                      color: club.status === 'active' ? '#991b1b' : '#166534',
+                      border: 'none', padding: '8px', borderRadius: '6px', fontSize: '12px', fontWeight: '600',
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px'
+                    }}
+                  >
+                    {club.status === 'active' ? <><XCircle size={14} /> Deactivate Club</> : <><CheckCircle size={14} /> Activate Club</>}
+                  </button>
+                )}
+
+                {activeRole === 'student' && (
+                  <>
+                    {club.is_member ? (
+                      <div style={{ width: '100%', textAlign: 'center', backgroundColor: '#dcfce7', color: '#166534', padding: '8px', borderRadius: '6px', fontSize: '12px', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                        <CheckCircle size={14} /> You're a Member
+                      </div>
+                    ) : club.request_status === 'pending' ? (
+                      <div style={{ width: '100%', textAlign: 'center', backgroundColor: '#fef3c7', color: '#92400e', padding: '8px', borderRadius: '6px', fontSize: '12px', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
+                        <Clock size={14} /> Request Pending
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => handleJoin(club.id)}
+                        disabled={joiningId === club.id}
+                        style={{
+                          width: '100%', backgroundColor: '#2563eb', color: '#fff', border: 'none', padding: '8px',
+                          borderRadius: '6px', fontSize: '12px', fontWeight: '600', cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px',
+                          opacity: joiningId === club.id ? 0.7 : 1
+                        }}
+                      >
+                        <UserPlus size={14} /> {joiningId === club.id ? 'Sending...' : club.request_status === 'rejected' ? 'Reapply to Join' : 'Join Club'}
+                      </button>
+                    )}
+                    {joinMsg[club.id] && (
+                      <div style={{ marginTop: '8px', fontSize: '12px', color: '#64748b' }}>{joinMsg[club.id]}</div>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -222,12 +317,84 @@ export default function ClubsList() {
                 <textarea required rows={4} placeholder="Describe the mission and activities of the club..." value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
               </div>
 
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '16px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>Faculty Coordinator *</label>
+                  <input type="text" required placeholder="e.g. Dr. K. S. Raman" value={formData.faculty_coordinator} onChange={(e) => setFormData({ ...formData, faculty_coordinator: e.target.value })} style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>Contact Email *</label>
+                  <input type="email" required placeholder="club@university.edu" value={formData.contact_email} onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })} style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+                </div>
+              </div>
+
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
                 <button type="button" onClick={() => setShowModal(false)} style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer' }}>
                   Cancel
                 </button>
                 <button type="submit" style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', background: '#2563eb', color: '#fff', fontWeight: '600', cursor: 'pointer' }}>
                   Submit
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {editingClub && editFormData && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100 }}>
+          <div style={{ backgroundColor: '#fff', borderRadius: '12px', width: '100%', maxWidth: '500px', padding: '28px', boxShadow: '0 10px 25px rgba(0,0,0,0.15)' }}>
+            <h3 style={{ marginTop: 0, color: '#0f172a' }}>Edit {editingClub.name}</h3>
+
+            {editMsg.error && <div style={{ backgroundColor: '#fef2f2', color: '#ef4444', padding: '10px', borderRadius: '6px', fontSize: '13px', marginBottom: '12px' }}>{editMsg.error}</div>}
+            {editMsg.success && <div style={{ backgroundColor: '#ecfdf5', color: '#10b981', padding: '10px', borderRadius: '6px', fontSize: '13px', marginBottom: '12px' }}>{editMsg.success}</div>}
+
+            <form onSubmit={handleEditSubmit}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>Club Name *</label>
+                  <input type="text" required value={editFormData.name} onChange={(e) => setEditFormData({ ...editFormData, name: e.target.value })} style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>Category *</label>
+                  <select value={editFormData.category} onChange={(e) => setEditFormData({ ...editFormData, category: e.target.value })} style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', backgroundColor: '#fff' }}>
+                    <option value="Technical">Technical</option>
+                    <option value="Cultural">Cultural</option>
+                    <option value="Sports">Sports</option>
+                    <option value="Literary">Literary</option>
+                    <option value="Social Service">Social Service</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>Description *</label>
+                <textarea required rows={4} value={editFormData.description} onChange={(e) => setEditFormData({ ...editFormData, description: e.target.value })} style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>Faculty Coordinator *</label>
+                  <input type="text" required value={editFormData.faculty_coordinator} onChange={(e) => setEditFormData({ ...editFormData, faculty_coordinator: e.target.value })} style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>Contact Email *</label>
+                  <input type="email" required value={editFormData.contact_email} onChange={(e) => setEditFormData({ ...editFormData, contact_email: e.target.value })} style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+                </div>
+              </div>
+
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: '600', marginBottom: '4px' }}>Contact Phone</label>
+                <input type="text" value={editFormData.contact_phone} onChange={(e) => setEditFormData({ ...editFormData, contact_phone: e.target.value })} style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }} />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                <button type="button" onClick={() => { setEditingClub(null); setEditFormData(null); }} style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer' }}>
+                  Cancel
+                </button>
+                <button type="submit" style={{ padding: '8px 16px', borderRadius: '6px', border: 'none', background: '#2563eb', color: '#fff', fontWeight: '600', cursor: 'pointer' }}>
+                  Save Changes
                 </button>
               </div>
             </form>

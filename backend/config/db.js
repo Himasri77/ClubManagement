@@ -10,43 +10,10 @@ const db = new sqlite3.Database(dbPath, (err) => {
   }
 });
 
-// Initialize Schema and Auto-Migrations
-db.serialize(() => {
-  // 1. Users Table
-  db.run(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      full_name TEXT NOT NULL,
-      email TEXT UNIQUE NOT NULL,
-      password TEXT NOT NULL,
-      role TEXT DEFAULT 'student',
-      department TEXT,
-      student_id TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  // 2. Clubs Table
-  db.run(`
-    CREATE TABLE IF NOT EXISTS clubs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      code TEXT UNIQUE NOT NULL,
-      category TEXT,
-      description TEXT,
-      lead_id INTEGER,
-      logo_url TEXT,
-      banner_url TEXT,
-      status TEXT DEFAULT 'pending',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  // Safely add columns if running on an existing database file
-  db.run("ALTER TABLE users ADD COLUMN student_id TEXT;", () => {});
-  db.run("ALTER TABLE users ADD COLUMN department TEXT;", () => {});
-  db.run("ALTER TABLE clubs ADD COLUMN lead_id INTEGER;", () => {});
-});
+// Schema creation is owned entirely by database/schema.sql, executed once
+// at boot by database/initDb.js. db.js only opens the connection and
+// exposes promise-based helpers — it must not create or alter tables itself,
+// or the two schema definitions will drift out of sync with each other.
 
 // Database Promise Helpers
 const run = (sql, params = []) => {

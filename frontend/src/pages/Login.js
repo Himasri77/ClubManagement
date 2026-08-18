@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import api from '../utils/api';
 import { Eye, EyeOff, Lock, Mail, ArrowRight } from 'lucide-react';
 
 export default function Login() {
@@ -19,11 +20,14 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const res = await login(email, password);
-      if (res.user.role === 'admin') {
-        navigate('/admin/dashboard');
-      } else {
-        navigate('/student/dashboard');
+      const res = await api.post('/auth/login', { email, password });
+      if (res.data.success) {
+        login(res.data.user, res.data.token);
+        if (res.data.user.role === 'admin') {
+          navigate('/admin/dashboard');
+        } else {
+          navigate('/student/dashboard');
+        }
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Login failed. Please check your credentials.');
