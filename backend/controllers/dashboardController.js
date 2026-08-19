@@ -30,6 +30,63 @@ exports.getAdminStats = async (req, res, next) => {
   }
 };
 
+// Admin analytics: charts for member growth, event trends, top clubs, category split
+exports.getAdminAnalytics = async (req, res, next) => {
+  try {
+    // 1. Member growth — new memberships per month, last 6 months
+    const memberGrowth = await all(
+      `SELECT strftime('%Y-%m', joined_at) as month, COUNT(*) as count
+       FROM club_members
+       WHERE joined_at >= date('now', '-6 months')
+       GROUP BY month ORDER BY month ASC`
+    );
+
+    // 2. Event trends — events created + total registrations per month, last 6 months
+    const eventTrends = await all(
+      `SELECT strftime('%Y-%m', e.event_date) as month,
+              COUNT(DISTINCT e.id) as events_count,
+              (SELECT COUNT(*) FROM event_registrations r
+                 JOIN events e2 ON r.event_id = e2.id
+                 WHERE strftime('%Y-%m', e2.event_date) = strftime('%Y-%m', e.event_date)
+                   AND r.status IN ('registered', 'attended')) as registrations
+       FROM events e
+       WHERE e.event_date >= date('now', '-6 months')
+       GROUP BY month ORDER BY month ASC`
+    );
+
+    // 3. Top 5 most active clubs by member count
+    const topClubs = await all(
+      `SELECT c.name, COUNT(m.id) as member_count
+       FROM clubs c LEFT JOIN club_members m ON m.club_id = c.id
+       WHERE c.status = 'active'
+       GROUP BY c.id ORDER BY member_count DESC LIMIT 5`
+    );
+
+    // 4. Club category distribution
+    const categoryDistribution = await all(
+      `SELECT category, COUNT(*) as count FROM clubs WHERE status = 'active' GROUP BY category`
+    );
+
+    // 5. Event attendance rate (attended vs registered, all-time)
+    const attendanceStats = await get(
+      `SELECT
+         (SELECT COUNT(*) FROM event_registrations WHERE status = 'attended') as attended,
+         (SELECT COUNT(*) FROM event_registrations WHERE status IN ('registered', 'attended')) as total`
+    );
+
+    return res.status(200).json({
+      success: true,
+      member_growth: memberGrowth,
+      event_trends: eventTrends,
+      top_clubs: topClubs,
+      category_distribution: categoryDistribution,
+      attendance_stats: attendanceStats
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // Student dashboard: their own clubs, request status, and notifications
 exports.getStudentStats = async (req, res, next) => {
   try {

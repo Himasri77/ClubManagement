@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
-import { Layers, Search, Plus, CheckCircle, XCircle, Users, Clock, UserPlus } from 'lucide-react';
+import { Layers, Search, Plus, CheckCircle, XCircle, Users, Clock, UserPlus, Eye } from 'lucide-react';
 
 export default function ClubsList() {
   const { activeRole, user } = useAuth();
+  const navigate = useNavigate();
   const [clubs, setClubs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -203,7 +205,14 @@ export default function ClubsList() {
                   </span>
                 </div>
 
-                <h3 style={{ margin: '0 0 6px 0', fontSize: '18px', color: '#0f172a' }}>{club.name}</h3>
+                <h3
+                  onClick={() => navigate(`/clubs/${club.id}`)}
+                  style={{ margin: '0 0 6px 0', fontSize: '18px', color: '#0f172a', cursor: 'pointer' }}
+                  onMouseEnter={(e) => (e.target.style.textDecoration = 'underline')}
+                  onMouseLeave={(e) => (e.target.style.textDecoration = 'none')}
+                >
+                  {club.name}
+                </h3>
                 <p style={{ margin: '0 0 16px 0', fontSize: '13px', color: '#64748b', lineHeight: '1.5' }}>
                   {club.description.length > 110 ? club.description.substring(0, 110) + '...' : club.description}
                 </p>
@@ -216,6 +225,17 @@ export default function ClubsList() {
                   </span>
                   <span>Lead: {club.lead_name || 'Unassigned'}</span>
                 </div>
+
+                <button
+                  onClick={() => navigate(`/clubs/${club.id}`)}
+                  style={{
+                    width: '100%', backgroundColor: '#f8fafc', color: '#334155', border: '1px solid #e2e8f0',
+                    padding: '8px', borderRadius: '6px', fontSize: '12px', fontWeight: '600', cursor: 'pointer',
+                    marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                  }}
+                >
+                  <Eye size={14} /> View Club Profile
+                </button>
 
                 {canEdit(club) && (
                   <button

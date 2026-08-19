@@ -1,5 +1,6 @@
 const { run, get, all } = require('../config/db');
 const { logActivity } = require('../utils/activityLogger');
+const { notifyClubMembers, notifyAllStudents } = require('../utils/notifier');
 
 // Helper: can this user manage announcements for this club (or global)?
 const canManage = (req, club) => {
@@ -110,6 +111,14 @@ exports.createAnnouncement = async (req, res, next) => {
     );
 
     await logActivity(req.user.id, 'create', 'announcement', result.lastID, `Announcement "${title.trim()}" was posted`);
+
+    // Notify the relevant audience
+    const notifType = announcementPriority === 'urgent' ? 'warning' : 'info';
+    if (announcementScope === 'club') {
+      await notifyClubMembers(club_id, `New Announcement: ${title.trim()}`, content.trim().slice(0, 120), notifType);
+    } else {
+      await notifyAllStudents(`New Announcement: ${title.trim()}`, content.trim().slice(0, 120), notifType);
+    }
 
     return res.status(201).json({ success: true, message: 'Announcement posted successfully!', announcement_id: result.lastID });
   } catch (err) {

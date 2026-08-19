@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../utils/api';
 import { Layers, Users, Clock, UserCheck, Activity } from 'lucide-react';
+import AnalyticsCharts from '../components/AnalyticsCharts';
 
 const StatCard = ({ icon, label, value, color }) => (
   <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
@@ -58,6 +59,8 @@ export default function AdminDashboard() {
         </Link>
         <StatCard icon={<UserCheck size={22} color="#7c3aed" />} label="Total Memberships" value={stats.total_memberships} color="#7c3aed" />
       </div>
+
+      <AnalyticsCharts />
 
       <div style={{ backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '10px', padding: '20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>

@@ -12,6 +12,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import StudentDashboard from './pages/StudentDashboard';
 import EventsList from './pages/EventsList';
 import Announcements from './pages/Announcements';
+import ClubDetail from './pages/ClubDetail';
 
 function App() {
   return (
@@ -23,6 +24,18 @@ function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           
+          {/* Shared Route: Club Profile Page (accessible to any logged-in user) */}
+          <Route
+            path="/clubs/:id"
+            element={
+              <ProtectedRoute>
+                <MainLayout>
+                  <ClubDetail />
+                </MainLayout>
+              </ProtectedRoute>
+            }
+          />
+
           {/* Admin Routes */}
           <Route
             path="/admin/dashboard"

@@ -6,6 +6,7 @@ const { authenticateToken, authorizeRole } = require('../middleware/auth');
 
 router.get('/', authenticateToken, clubController.getAllClubs);
 router.get('/:id', authenticateToken, clubController.getClubById);
+router.get('/:id/members', authenticateToken, clubController.getClubMembers);
 router.post('/', authenticateToken, clubController.createClub);
 router.put('/:id', authenticateToken, clubController.updateClub);
 router.patch('/:id/status', authenticateToken, authorizeRole('admin'), clubController.reviewClubStatus);

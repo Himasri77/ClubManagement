@@ -1,5 +1,6 @@
 const { run, get, all } = require('../config/db');
 const { logActivity } = require('../utils/activityLogger');
+const { notifyClubMembers, notifyAllStudents } = require('../utils/notifier');
 
 // Helper: can this user manage events for this club (or global events)?
 const canManageEvents = (req, club) => {
@@ -124,6 +125,23 @@ exports.createEvent = async (req, res, next) => {
 
     await logActivity(req.user.id, 'create', 'event', result.lastID, `Event "${title.trim()}" was created`);
 
+    // Notify the relevant audience — club members for a club event, everyone for a global one
+    const eventDateLabel = new Date(event_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    if (eventScope === 'club') {
+      await notifyClubMembers(
+        club_id,
+        'New Event Announced',
+        `"${title.trim()}" is happening on ${eventDateLabel} at ${venue.trim()}.`,
+        'info'
+      );
+    } else {
+      await notifyAllStudents(
+        'New Campus Event',
+        `"${title.trim()}" is happening on ${eventDateLabel} at ${venue.trim()}.`,
+        'info'
+      );
+    }
+
     return res.status(201).json({ success: true, message: 'Event created successfully!', event_id: result.lastID });
   } catch (err) {
     next(err);
@@ -245,7 +263,40 @@ exports.cancelRegistration = async (req, res, next) => {
   }
 };
 
-// 7. Get registrants for an event (admin or club lead)
+// 8. Mark a registrant's attendance (admin or that club's lead)
+exports.markAttendance = async (req, res, next) => {
+  try {
+    const { id: eventId, regId } = req.params;
+    const { attended } = req.body; // true -> 'attended', false -> back to 'registered'
+
+    const event = await get('SELECT * FROM events WHERE id = ?', [eventId]);
+    if (!event) {
+      return res.status(404).json({ success: false, message: 'Event not found.' });
+    }
+    const club = event.club_id ? await get('SELECT id, club_lead_id FROM clubs WHERE id = ?', [event.club_id]) : null;
+    if (!canManageEvents(req, club)) {
+      return res.status(403).json({ success: false, message: 'Unauthorized to mark attendance for this event.' });
+    }
+
+    const registration = await get(
+      `SELECT id FROM event_registrations WHERE id = ? AND event_id = ?`,
+      [regId, eventId]
+    );
+    if (!registration) {
+      return res.status(404).json({ success: false, message: 'Registration not found.' });
+    }
+
+    await run(
+      `UPDATE event_registrations SET status = ? WHERE id = ?`,
+      [attended ? 'attended' : 'registered', regId]
+    );
+
+    return res.status(200).json({ success: true, message: `Attendance ${attended ? 'marked' : 'unmarked'}.` });
+  } catch (err) {
+    next(err);
+  }
+};
+
 exports.getEventRegistrations = async (req, res, next) => {
   try {
     const { id: eventId } = req.params;

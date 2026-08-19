@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import NotificationBell from './NotificationBell';
 import {
   LayoutDashboard,
   Users,
@@ -39,7 +40,6 @@ export default function MainLayout({ children }) {
         { label: 'Explore Clubs', path: '/student/clubs', icon: Layers },
         { label: 'My Clubs', path: '/student/my-clubs', icon: Users },
         { label: 'Events Calendar', path: '/student/events', icon: Calendar },
-        { label: 'Notifications', path: '/student/notifications', icon: Bell },
       ];
 
   return (
@@ -193,6 +193,7 @@ export default function MainLayout({ children }) {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <NotificationBell />
             <div style={{
               display: 'flex',
               alignItems: 'center',

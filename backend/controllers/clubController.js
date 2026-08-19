@@ -76,6 +76,32 @@ exports.getClubById = async (req, res, next) => {
   }
 };
 
+// 2b. Get Club Members (public roster for the club profile page)
+exports.getClubMembers = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const club = await get('SELECT id FROM clubs WHERE id = ?', [id]);
+    if (!club) {
+      return res.status(404).json({ success: false, message: 'Club not found.' });
+    }
+
+    const members = await all(
+      `SELECT m.id as membership_id, m.role, m.joined_at,
+              u.id as user_id, u.full_name, u.email, u.department, u.year, u.profile_pic
+       FROM club_members m
+       JOIN users u ON m.user_id = u.id
+       WHERE m.club_id = ?
+       ORDER BY CASE m.role WHEN 'Club Lead' THEN 0 ELSE 1 END, m.joined_at ASC`,
+      [id]
+    );
+
+    return res.status(200).json({ success: true, members });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // 3. Create New Club (Admin only — matches schema's NOT NULL columns)
 exports.createClub = async (req, res, next) => {
   try {

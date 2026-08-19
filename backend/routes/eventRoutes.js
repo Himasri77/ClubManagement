@@ -10,5 +10,6 @@ router.put('/:id', authenticateToken, eventController.updateEvent);
 router.post('/:id/register', authenticateToken, eventController.registerForEvent);
 router.post('/:id/cancel', authenticateToken, eventController.cancelRegistration);
 router.get('/:id/registrations', authenticateToken, eventController.getEventRegistrations);
+router.patch('/:id/registrations/:regId/attendance', authenticateToken, eventController.markAttendance);
 
 module.exports = router;
